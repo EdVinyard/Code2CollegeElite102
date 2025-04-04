@@ -93,11 +93,8 @@ class Account:
             ')'
 
 def q(x) -> str:
-    '''quoted string-ified version of `x`, or `None`'''
-    if x is None:
-        return 'None'
-
-    return f'"{str(x)}"'
+    '''quoted string-ified version of `x`, or "None"'''
+    return 'None' if x is None else f'"{str(x)}"'
 
 class BankDatabase(ABC):
     @abstractmethod
@@ -123,8 +120,6 @@ class BankDatabase(ABC):
         pass
 
 class Bank:
-    _db: BankDatabase
-
     def __init__(self, database: BankDatabase):
         self._db = database
 

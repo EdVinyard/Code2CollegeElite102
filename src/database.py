@@ -138,10 +138,6 @@ class BankMySqlDatabase(BankDatabase):
     def commit_transaction(self):
         self.connection.commit()
 
-def utcnow() -> datetime:
-    '''shorthand for datetime.now(timezone.utc)'''
-    return datetime.now(timezone.utc)
-
 def select_and_print(db, acct_id):
     account = db.select_by_id(acct_id)
     print(f'selected {account}')
