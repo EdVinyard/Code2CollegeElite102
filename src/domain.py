@@ -197,6 +197,7 @@ class Bank:
         return self._db.select_by_id(account_id)
 
     def close_account(self, account_id: AccountId) -> Account:
+        self._db.start_serializable_transaction()
         account = self.load(account_id)
 
         if account.closed_at is not None:
@@ -206,15 +207,18 @@ class Bank:
             raise ValueError('cannot close account with non-zero balance')
 
         self._db.update_closed_at(account_id, self._clock.utcnow())
+        self._db.commit_transaction()
         return self.load(account_id)
 
     def alter_name(self, account_id: AccountId, full_name: str) -> Account:
+        self._db.start_serializable_transaction()
         account = self.load(account_id)
 
         if account.closed_at is not None:
             raise ValueError('cannot alter closed account')
 
         self._db.update_name(account_id, full_name)
+        self._db.commit_transaction()
         return self.load(account_id)
 
     def deposit(self, account_id: AccountId, amount: USD) -> Account:
