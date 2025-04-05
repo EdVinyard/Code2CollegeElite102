@@ -1,4 +1,6 @@
 import unittest
+from unittest.mock import MagicMock, Mock, call
+from datetime import timezone
 
 from domain import *
 
@@ -66,13 +68,241 @@ class TestUSD(unittest.TestCase):
         with self.assertRaises(ValueError):
             USD(USD.MIN_CENTS - 1)
 
+    def test_add(self):
+        self.assertEqual(USD(3_00), USD(1_00) + USD(2_00))
+
+        with self.assertRaises(NotImplementedError):
+            USD(1_00) + 1_000_000
+
+    def test_subtract(self):
+        self.assertEqual(USD(-1_00), USD(1_00) - USD(2_00))
+
+        with self.assertRaises(NotImplementedError):
+            USD(1_00) - 1_000_000
+
+    def test_less_than(self):
+        self.assertLess(USD(1_00), USD(2_00))
+
+        with self.assertRaises(NotImplementedError):
+            if USD(1_00) < 1_000_000:
+                self.fail('SHOULD NOT COMPARE USD TO NUMBER')
+
+    def test_greater_than_or_equal_to(self):
+        self.assertGreaterEqual(USD(2_00), USD(1_00))
+
+        with self.assertRaises(NotImplementedError):
+            if USD(1_00) >= 1_000_000:
+                self.fail('SHOULD NOT COMPARE USD TO NUMBER')
+
 class TestAccount(unittest.TestCase):
-    def test_more(self):
-        self.fail('write more tests')
+    def test_invalid_names(self):
+        for invalid_name in [None, '', ' \t\r\n']:
+            with self.subTest(invalid_name):
+                with self.assertRaises(ValueError):
+                    Account.new(invalid_name)
+
+    def test_closed_at_none(self):
+        ## Act
+        actual = Account(1, 'Frank the Cat', USD.ZERO, None)
+
+        ## Assert
+        self.assertIsNone(actual.closed_at)
+
+    def test_closed_at_without_tzinfo(self):
+        ## Arrange
+        no_tzinfo = datetime(2025, 4, 5, 11, 18, 12, tzinfo=None)
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            Account(1, 'Frank the Cat', USD.ZERO, no_tzinfo)
+
+    def test_happy_path(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+
+        ## Act
+        actual = Account(12, 'Frank the Cat', USD(1_23), utcnow)
+
+        ## Assert
+        self.assertEqual(12, actual.id)
+        self.assertEqual('Frank the Cat', actual.full_name)
+        self.assertEqual(USD(1_23), actual.balance)
+        self.assertEqual(utcnow, actual.closed_at)
+
+class FakeClock(Clock):
+    def __init__(self, return_value=None):
+        self.value = return_value if return_value else datetime.now(timezone.utc)
+
+    def utcnow(self):
+        return self.value
 
 class TestBank(unittest.TestCase):
-    def test_more(self):
-        self.fail('write more tests')
+    def test_open_account(self):
+        ## Arrange
+        db = Mock(return_value=Account(1, 'x', USD.ZERO, None))
+        clock = Mock(Clock)
+        bank = Bank(db, clock)
+
+        ## Act
+        actual = bank.open_account('Frank the Cat')
+
+        ## Assert
+        self.assertTrue(db.insert.called)
+        self.assertEqual('Frank the Cat', db.insert.call_args[0][0].full_name)
+
+    def test_load(self):
+        ## Arrange
+        db = Mock(return_value=Account(1, 'x', USD.ZERO, None))
+        clock = Mock(Clock)
+        bank = Bank(db, clock)
+
+        ## Act
+        actual = bank.load(1)
+
+        ## Assert
+        self.assertTrue(db.select_by_id.called)
+        self.assertEqual(1, db.select_by_id.call_args[0][0])
+
+    def test_close_account_with_zero_balance(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        clock = FakeClock(utcnow)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        bank = Bank(db, clock)
+
+        ## Act
+        actual = bank.close_account(1)
+
+        ## Assert
+        self.assertTrue(db.update_closed_at.called)
+        self.assertEqual(1, db.update_closed_at.call_args[0][0])
+        self.assertEqual(utcnow, db.update_closed_at.call_args[0][1])
+
+    def test_close_account_with_positive_balance(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        clock = FakeClock(utcnow)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD(1_00), None)
+        bank = Bank(db, clock)
+
+        ## Act
+        with self.assertRaises(ValueError):
+            bank.close_account(1)
+
+        self.assertFalse(db.update_closed_at.called)
+
+    def test_close_account_already_closed(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        clock = FakeClock(utcnow)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, utcnow)
+        bank = Bank(db, clock)
+
+        ## Act
+        bank.close_account(1)
+
+        ## Assert
+        self.assertFalse(db.update_closed_at.called)
+
+    def test_alter_name_with_open_account(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        actual = bank.alter_name(1, 'Frank the Cat')
+
+        ## Assert
+        self.assertTrue(db.update_name.called)
+        self.assertEqual(1, db.update_name.call_args[0][0])
+        self.assertEqual('Frank the Cat', db.update_name.call_args[0][1])
+
+    def test_alter_name_with_closed_account(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, utcnow)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            bank.alter_name(1, 'Frank the Cat')
+
+        ## Assert
+        self.assertFalse(db.update_name.called)
+
+    def test_deposit_happy_path(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD(1_00), None)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        actual = bank.deposit(1, USD(2_00))
+
+        ## Assert
+        db.assert_has_calls([
+            call.start_serializable_transaction(),
+            call.select_by_id(1),
+            call.update_balance(1, USD(3_00)),
+            call.commit_transaction(),
+            call.select_by_id(1),
+            ])
+
+    def test_deposit_into_closed_account(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, utcnow)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            bank.deposit(1, USD(2_00))
+
+    def test_withdraw_happy_path(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD(1_00), None)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        actual = bank.withdraw(1, USD(1_00))
+
+        ## Assert
+        db.assert_has_calls([
+            call.start_serializable_transaction(),
+            call.select_by_id(1),
+            call.update_balance(1, USD.ZERO),
+            call.commit_transaction(),
+            call.select_by_id(1),
+            ])
+
+    def test_withdraw_from_closed_account(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, utcnow)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            bank.withdraw(1, USD(2_00))
+
+    def test_withdraw_overdraft(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD(1_00), None)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            bank.withdraw(1, USD(2_00))
 
 if __name__ == '__main__':
     unittest.main()

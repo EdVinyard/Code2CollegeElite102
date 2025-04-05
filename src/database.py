@@ -2,8 +2,10 @@ from datetime import datetime, timezone
 import mysql.connector
 from mysql.connector.pooling import PooledMySQLConnection
 
-from domain import USD, Account, BankDatabase
+from domain import USD, Account, AccountId, BankDatabase
 
+_POOL_NAME = 'BankDatabase'
+_POOL_SIZE = 3
 
 class BankMySqlDatabase(BankDatabase):
     '''the Bank's MySQL database of accounts'''
@@ -18,7 +20,9 @@ class BankMySqlDatabase(BankDatabase):
             database = 'elite102',
             user = 'elite102',
             password = 'password',
-            pool_name = 'BankDatabase')
+            raise_on_warnings = True,
+            pool_name = _POOL_NAME,
+            pool_size = _POOL_SIZE)
         return self
 
     def __exit__(self, _exc_type, _exc_value, _traceback):
@@ -26,7 +30,7 @@ class BankMySqlDatabase(BankDatabase):
         if self.connection:
             self.connection.close()
 
-    def select_by_id(self, account_id: int) -> Account:
+    def select_by_id(self, account_id: AccountId) -> Account:
         '''
         Select a single account row by ID; returns None if the ID does not exist
         in the accounts table
@@ -50,22 +54,18 @@ class BankMySqlDatabase(BankDatabase):
         if row is None:
             return None
 
-        (acct_id, name, balance, closed_at) = row
+        (acct_id, name, balance_usd_cents, closed_at) = row
         if closed_at is not None:
             closed_at = closed_at.replace(tzinfo=timezone.utc)
 
-        return Account(acct_id, name, balance, closed_at)
+        return Account(acct_id, name, USD(balance_usd_cents), closed_at)
 
-    def insert(
-            self,
-            full_name: str,
-            balance: USD,
-            closed_at: datetime,
-            ) -> Account:
-        '''
-        insert a row for the never-before-saved Account
-        '''
-        # closed_at_utc = closed_at.astimezone(timezone.utc)
+    def insert(self, a: Account) -> Account:
+        '''insert a row for the never-before-saved Account'''
+        if a.id is not None:
+            raise ValueError(
+                f'cannot insert an Account with an ID (it was {a.id})')
+
         cursor = self.connection.cursor()
         cursor.execute(
             '''
@@ -76,15 +76,15 @@ class BankMySqlDatabase(BankDatabase):
                 );
             ''',
             {
-                'full_name': full_name,
-                'balance_usd_cents': balance,
-                'closed_at_utc': closed_at,
+                'full_name': a.full_name,
+                'balance_usd_cents': a.balance.total_cents,
+                'closed_at_utc': a.closed_at,
             })
         self.connection.commit()
         account_id = cursor.lastrowid
-        return Account(account_id, full_name, balance, closed_at)
+        return Account(account_id, a.full_name, a.balance, a.closed_at)
 
-    def update_closed_at(self, account_id: int, closed_at: datetime) -> None:
+    def update_closed_at(self, account_id: AccountId, closed_at: datetime) -> None:
         '''record the date-time at which an account is closed'''
         cursor = self.connection.cursor()
         cursor.execute('''
@@ -99,7 +99,7 @@ class BankMySqlDatabase(BankDatabase):
                 'id': account_id,
             })
 
-    def update_name(self, account_id: int, full_name: str) -> None:
+    def update_name(self, account_id: AccountId, full_name: str) -> None:
         '''alter the name of the account owner'''
         cursor = self.connection.cursor()
         cursor.execute('''
@@ -114,11 +114,8 @@ class BankMySqlDatabase(BankDatabase):
                 'id': account_id,
             })
 
-    def update_balance(self, account_id: int, balance: USD) -> None:
-        '''
-        Select a single account row by ID; returns None if the ID does not exist
-        in the accounts table
-        '''
+    def update_balance(self, account_id: AccountId, balance: USD) -> int:
+        '''alter the balance of an existing account row'''
         cursor = self.connection.cursor()
         cursor.execute('''
             update account set
@@ -131,31 +128,10 @@ class BankMySqlDatabase(BankDatabase):
                 'balance_usd_cents': balance.total_cents,
                 'id': account_id,
             })
+        return cursor.rowcount
 
-    def begin_serializable_transaction(self):
+    def start_serializable_transaction(self):
         self.connection.start_transaction(isolation_level='SERIALIZABLE')
 
     def commit_transaction(self):
         self.connection.commit()
-
-def select_and_print(db, acct_id):
-    account = db.select_by_id(acct_id)
-    print(f'selected {account}')
-
-def main():
-    with BankMySqlDatabase() as db:
-        account = db.insert('Frank the Cat', 0, None)
-        print(f'inserted {account}')
-        select_and_print(db, account.id)
-
-        db.update_name(account.id, 'Frank the Awesome Cat')
-        select_and_print(db, account.id)
-
-        db.update_balance(account.id, USD(123_45))
-        select_and_print(db, account.id)
-
-        db.update_closed_at(account.id, datetime.now(timezone.utc))
-        select_and_print(db, account.id)
-
-if __name__ == '__main__':
-    main()
