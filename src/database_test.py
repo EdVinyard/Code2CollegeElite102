@@ -172,3 +172,6 @@ def withdraw(account_id: AccountId, withdrawal: USD, wait: WaitSignal) -> None:
                     raise err
 
     return withdraw_closure
+
+if __name__ == '__main__':
+    unittest.main()
