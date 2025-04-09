@@ -1,4 +1,6 @@
-# Code2CollegeElite102 Milestones
+# Code2College Elite 102 Section 4L
+
+[Zoom](https://us02web.zoom.us/j/85007036603)
 
 ## Week 1
 

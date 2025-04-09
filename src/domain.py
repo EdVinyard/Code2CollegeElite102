@@ -173,3 +173,72 @@ class BankDatabase(ABC):
     @abstractmethod
     def commit_transaction(self) -> None:
         raise NotImplementedError()
+
+class Clock(ABC):
+    @abstractmethod
+    def utcnow(self) -> datetime:
+        raise NotImplementedError()
+
+class BoolLike(ABC):
+    @abstractmethod
+    def __bool__(self):
+        raise NotImplementedError()
+
+class Bank:
+    def __init__(self, database: BankDatabase, clock: Clock):
+        self._db = database
+        self._clock = clock
+
+    def open_account(self, full_name: str) -> Account:
+        return self._db.insert(Account.new(full_name))
+
+    def load(self, account_id: AccountId) -> Account:
+        return self._db.select_by_id(account_id)
+
+    def close_account(self, account_id: AccountId) -> Account:
+        self._db.start_serializable_transaction()
+        account = self.load(account_id)
+
+        if account.closed_at is not None:
+            return account
+
+        if account.balance != USD.ZERO:
+            raise ValueError('cannot close account with non-zero balance')
+
+        self._db.update_closed_at(account_id, self._clock.utcnow())
+        self._db.commit_transaction()
+        return self.load(account_id)
+
+    def alter_name(self, account_id: AccountId, full_name: str) -> Account:
+        self._db.start_serializable_transaction()
+        account = self.load(account_id)
+
+        if account.closed_at is not None:
+            raise ValueError('cannot alter closed account')
+
+        self._db.update_name(account_id, full_name)
+        self._db.commit_transaction()
+        return self.load(account_id)
+
+    def deposit(self, account_id: AccountId, amount: USD) -> Account:
+        self._db.start_serializable_transaction()
+        account = self.load(account_id)
+        if account.closed_at is not None:
+            raise ValueError('cannot deposit into closed account')
+
+        self._db.update_balance(account_id, account.balance + amount)
+        self._db.commit_transaction()
+        return self.load(account_id)
+
+    def withdraw(self, account_id: AccountId, amount: USD) -> Account:
+        self._db.start_serializable_transaction()
+        account = self.load(account_id)
+        if account.closed_at is not None:
+            raise ValueError('cannot withdraw from closed account')
+
+        if account.balance < amount:
+            raise ValueError('cannot withdraw more than current balance')
+
+        self._db.update_balance(account_id, account.balance - amount)
+        self._db.commit_transaction()
+        return self.load(account_id)
