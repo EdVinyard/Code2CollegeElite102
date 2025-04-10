@@ -80,7 +80,6 @@ class BankMySqlDatabase(BankDatabase):
                 'balance_usd_cents': a.balance.total_cents,
                 'closed_at_utc': a.closed_at,
             })
-        self.connection.commit()
         account_id = cursor.lastrowid
         return Account(account_id, a.full_name, a.balance, a.closed_at)
 
@@ -135,3 +134,6 @@ class BankMySqlDatabase(BankDatabase):
 
     def commit_transaction(self):
         self.connection.commit()
+
+    def rollback_transaction(self):
+        self.connection.rollback()

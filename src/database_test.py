@@ -33,8 +33,8 @@ def tprint(*args, **kwargs):
         return
 
     head, *tail = args
-    format = current_thread().name + ': ' + repr(args[0])
-    print(format, *tail, **kwargs)
+    fmt = current_thread().name + ': ' + repr(head)
+    print(fmt, *tail, **kwargs)
 
 ONE_SECOND = timedelta(seconds=1)
 class TestBankMySqlDatabase(unittest.TestCase):
@@ -118,7 +118,9 @@ class TestBankMySqlDatabase(unittest.TestCase):
         '''
         ## Arrange
         with BankMySqlDatabase() as arrange:
+            arrange.start_serializable_transaction()
             frank = arrange.insert(Account(None, 'Frank the Cat', USD(1_00), None))
+            arrange.commit_transaction()
 
         ## Act
         wait_signal = WaitSignal()
@@ -140,6 +142,24 @@ class TestBankMySqlDatabase(unittest.TestCase):
             self.assertGreater(USD(1_00), actual.balance)
             self.assertLess(USD.ZERO, actual.balance)
 
+    def test_multiple_transactions(self):
+        ## Arrange
+        with BankMySqlDatabase() as db:
+            now = datetime.now(timezone.utc)
+            for i in range(3):
+                expected = Account(
+                    None,
+                    f'multiple transaction test {i}',
+                    USD(123_45),
+                    now)
+
+                ## Act
+                db.insert(expected)
+                db.commit_transaction()
+
+                ## Assert
+                self.assertFalse(db.connection.in_transaction)
+
 def withdraw(account_id: AccountId, withdrawal: USD, wait: WaitSignal) -> None:
     def withdraw_closure():
         with BankMySqlDatabase() as db:
@@ -147,6 +167,9 @@ def withdraw(account_id: AccountId, withdrawal: USD, wait: WaitSignal) -> None:
                 db.start_serializable_transaction()
 
                 before = db.select_by_id(account_id)
+                if before is None:
+                    raise RuntimeError(f'account ID {account_id} not found')
+
                 tprint(f'before: {before}')
 
                 if before.balance >= withdrawal:

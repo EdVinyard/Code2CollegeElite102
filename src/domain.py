@@ -173,10 +173,14 @@ class BankDatabase(ABC):
     @abstractmethod
     def commit_transaction(self) -> None:
         raise NotImplementedError()
+    @abstractmethod
+    def rollback_transaction(self) -> None:
+        raise NotImplementedError()
 
 class Clock(ABC):
     @abstractmethod
     def utcnow(self) -> datetime:
+        '''the current time '''
         raise NotImplementedError()
 
 class BoolLike(ABC):
@@ -190,12 +194,21 @@ class Bank:
         self._clock = clock
 
     def open_account(self, full_name: str) -> Account:
-        return self._db.insert(Account.new(full_name))
+        ## FIXME: test transaction error handling
+        self._db.start_serializable_transaction()
+        try:
+            account = self._db.insert(Account.new(full_name))
+            self._db.commit_transaction()
+            return account
+        except:
+            self._db.rollback_transaction()
+            raise
 
     def load(self, account_id: AccountId) -> Account:
         return self._db.select_by_id(account_id)
 
     def close_account(self, account_id: AccountId) -> Account:
+        ## FIXME: transaction error handling
         self._db.start_serializable_transaction()
         account = self.load(account_id)
 
@@ -210,17 +223,26 @@ class Bank:
         return self.load(account_id)
 
     def alter_name(self, account_id: AccountId, full_name: str) -> Account:
+        ## FIXME: test transaction error handling
         self._db.start_serializable_transaction()
-        account = self.load(account_id)
+        try:
+            account = self.load(account_id)
 
-        if account.closed_at is not None:
-            raise ValueError('cannot alter closed account')
+            ## FIXME: Allowed to set empty name!
 
-        self._db.update_name(account_id, full_name)
-        self._db.commit_transaction()
-        return self.load(account_id)
+            if account.closed_at is not None:
+                raise ValueError('cannot alter closed account')
+
+            self._db.update_name(account_id, full_name)
+            after = self.load(account_id)
+            self._db.commit_transaction()
+            return after
+        except:
+            self._db.rollback_transaction()
+            raise
 
     def deposit(self, account_id: AccountId, amount: USD) -> Account:
+        ## FIXME: transaction error handling
         self._db.start_serializable_transaction()
         account = self.load(account_id)
         if account.closed_at is not None:
@@ -231,6 +253,7 @@ class Bank:
         return self.load(account_id)
 
     def withdraw(self, account_id: AccountId, amount: USD) -> Account:
+        ## FIXME: transaction error handling
         self._db.start_serializable_transaction()
         account = self.load(account_id)
         if account.closed_at is not None:

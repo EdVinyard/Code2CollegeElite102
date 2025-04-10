@@ -6,6 +6,7 @@ name = "pypi"
 [scripts]
 test = "python -m unittest discover --start-directory src --pattern '*_test.py'"
 lint = "python -m pylint src"
+gui = "python src"
 
 [packages]
 mysql-connector-python = "*"
