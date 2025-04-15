@@ -196,6 +196,65 @@ class ViewBalance(Toplevel):
         except Exception as exc:
             self.message.set(f'ERROR {exc}')
 
+class Deposit(Toplevel):
+    def __init__(self, parent: Widget, bank: domain.Bank):
+        super().__init__(parent)
+        self.parent = parent
+        self.bank = bank
+
+        ttk.Label(
+            self,
+            text="Deposit into Account",
+            ).pack()
+
+        form_grid = Frame(self)
+        form_grid.pack()
+
+        ttk.Label(
+            form_grid,
+            text="Account ID",
+            ).grid(row=0, column=0)
+        self.account_id = StringVar()
+        ttk.Entry(
+            form_grid,
+            textvariable=self.account_id,
+            ).grid(row=0, column=1)
+
+        ttk.Label(
+            form_grid,
+            text="Amount USD",
+            ).grid(row=1, column=0)
+        self.amount_usd = StringVar()
+        ttk.Entry(
+            form_grid,
+            textvariable=self.amount_usd,
+            ).grid(row=1, column=1)
+
+        ttk.Button(
+            self,
+            text='Deposit',
+            command=self.on_click,
+            ).pack(side='top')
+
+        self.message = StringVar()
+        self.message.set('')
+        ttk.Label(
+            self,
+            textvariable=self.message,
+            ).pack(fill='both')
+
+    def on_click(self):
+        try:
+            ## STARTHERE
+            account_id = int(self.account_id.get())
+            account_id = float(self.amount_usd.get())
+            account = self.bank.alter_name(account_id, self.amount_usd.get())
+            self.message.set(
+                f'Account {account_id} balance was {balance_before};'
+                f'is now {balance_after}.')
+        except Exception as exc:
+            self.message.set(f'ERROR {exc}')
+
 class MainMenu(Frame):
     def __init__(
             self,
