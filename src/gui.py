@@ -1,4 +1,4 @@
-from tkinter import Frame, StringVar, Toplevel, Widget, ttk, Tk
+from tkinter import Frame, StringVar, Toplevel, Widget, ttk, Tk, messagebox
 from typing import Callable
 
 import domain
@@ -177,13 +177,13 @@ class MainMenu(Frame):
         CloseAccount(self.parent, self.bank)
 
     def on_view_balance(self):
-        raise NotImplementedError()
+        messagebox.showerror(message='not implemented')
 
     def on_deposit(self):
-        raise NotImplementedError()
+        messagebox.showerror(message='not implemented')
 
     def on_withdraw(self):
-        raise NotImplementedError()
+        messagebox.showerror(message='not implemented')
 
 class Application:
     def __init__(self, bank: domain.Bank):
