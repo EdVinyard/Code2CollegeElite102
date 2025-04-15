@@ -150,6 +150,13 @@ class TestAccount(unittest.TestCase):
         self.assertEqual(USD(1_23), actual.balance)
         self.assertEqual(utcnow, actual.closed_at)
 
+    def test_is_open(self):
+        open_account = Account(1, 'x', USD.ZERO, None)
+        self.assertTrue(open_account.is_open)
+
+        closed_account = Account(2, 'y', USD.ZERO, FakeClock().utcnow())
+        self.assertFalse(closed_account.is_open)
+
 class FakeClock(Clock):
     def __init__(self, return_value=None):
         self.value = return_value if return_value else datetime.now(timezone.utc)

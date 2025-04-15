@@ -7,6 +7,7 @@ name = "pypi"
 test = "python -m unittest discover --start-directory src --pattern '*_test.py'"
 lint = "python -m pylint src"
 gui = "python src"
+gui_watch = "bash -c \"find src | entr -dcr python src\""
 
 [packages]
 mysql-connector-python = "*"

@@ -148,6 +148,54 @@ class CloseAccount(Toplevel):
         except Exception as exc:
             self.message.set(f'ERROR {exc}')
 
+class ViewBalance(Toplevel):
+    def __init__(self, parent: Widget, bank: domain.Bank):
+        super().__init__(parent)
+        self.parent = parent
+        self.bank = bank
+
+        ttk.Label(
+            self,
+            text="View Balance",
+            ).pack()
+
+        form_grid = Frame(self)
+        form_grid.pack()
+
+        ttk.Label(
+            form_grid,
+            text="Account ID",
+            ).grid(row=0, column=0)
+        self.account_id = StringVar()
+        ttk.Entry(
+            form_grid,
+            textvariable=self.account_id,
+            ).grid(row=0, column=1)
+
+        ttk.Button(
+            self,
+            text='Look Up',
+            command=self.on_click,
+            ).pack(side='top')
+
+        self.message = StringVar()
+        self.message.set('')
+        ttk.Label(
+            self,
+            textvariable=self.message,
+            ).pack(fill='both')
+
+    def on_click(self):
+        try:
+            account_id = int(self.account_id.get())
+            account = self.bank.load(account_id)
+            open_or_closed = 'open' if account.is_open else 'closed'
+            self.message.set(
+                f'{open_or_closed} account {account_id} '
+                f'balance is {account.balance}')
+        except Exception as exc:
+            self.message.set(f'ERROR {exc}')
+
 class MainMenu(Frame):
     def __init__(
             self,
@@ -186,7 +234,7 @@ class MainMenu(Frame):
         CloseAccount(self.parent, self.bank)
 
     def on_view_balance(self):
-        messagebox.showerror(message='not implemented')
+        ViewBalance(self.parent, self.bank)
 
     def on_deposit(self):
         messagebox.showerror(message='not implemented')

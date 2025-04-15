@@ -140,6 +140,10 @@ class Account:
     def closed_at(self) -> datetime | None:
         return self._closed_at
 
+    @property
+    def is_open(self) -> bool:
+        return self._closed_at is None
+
     def __str__(self):
         return 'Account(' \
             f'acct_id={self._id}, ' \
@@ -216,7 +220,7 @@ class Bank:
         try:
             before = self.load(account_id)
 
-            if before.closed_at is not None:
+            if not before.is_open:
                 return before
 
             if before.balance != USD.ZERO:
@@ -236,7 +240,7 @@ class Bank:
         try:
             account = self.load(account_id)
 
-            if account.closed_at is not None:
+            if not account.is_open:
                 raise ValueError('cannot alter closed account')
 
             self._db.update_name(account_id, full_name)
@@ -251,7 +255,7 @@ class Bank:
         self._db.start_serializable_transaction()
         try:
             account = self.load(account_id)
-            if account.closed_at is not None:
+            if not account.is_open:
                 raise ValueError('cannot deposit into closed account')
 
             self._db.update_balance(account_id, account.balance + amount)
@@ -266,7 +270,7 @@ class Bank:
         self._db.start_serializable_transaction()
         try:
             account = self.load(account_id)
-            if account.closed_at is not None:
+            if not account.is_open:
                 raise ValueError('cannot withdraw from closed account')
 
             if account.balance < amount:
