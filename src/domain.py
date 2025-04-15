@@ -81,6 +81,15 @@ class USD:
 
 USD.ZERO = USD(0)
 
+def validated_full_name(full_name: str) -> str:
+    '''
+    returns the supplied full name, or raises ValueError when it is invalid
+    '''
+    if full_name is None or len(full_name.strip()) == 0:
+        raise ValueError('full_name must contain non-whitespace characters')
+
+    return full_name
+
 class Account:
     '''a single bank account'''
     _id: AccountId | None
@@ -104,11 +113,7 @@ class Account:
         `Account.new()` for entirely new accounts.
         '''
         self._id = acct_id
-
-        if full_name is None or len(full_name.strip()) == 0:
-            raise ValueError('full_name must contain non-whitespace characters')
-
-        self._full_name = full_name
+        self._full_name = validated_full_name(full_name)
         self._balance = balance
 
         if closed_at is None:
@@ -194,7 +199,6 @@ class Bank:
         self._clock = clock
 
     def open_account(self, full_name: str) -> Account:
-        ## FIXME: test transaction error handling
         self._db.start_serializable_transaction()
         try:
             account = self._db.insert(Account.new(full_name))
@@ -208,7 +212,6 @@ class Bank:
         return self._db.select_by_id(account_id)
 
     def close_account(self, account_id: AccountId) -> Account:
-        ## FIXME: test transaction error handling
         self._db.start_serializable_transaction()
         try:
             before = self.load(account_id)
@@ -228,12 +231,10 @@ class Bank:
             raise
 
     def alter_name(self, account_id: AccountId, full_name: str) -> Account:
-        ## FIXME: test transaction error handling
+        full_name = validated_full_name(full_name)
         self._db.start_serializable_transaction()
         try:
             account = self.load(account_id)
-
-            ## FIXME: Allowed to set empty name!
 
             if account.closed_at is not None:
                 raise ValueError('cannot alter closed account')
@@ -247,26 +248,34 @@ class Bank:
             raise
 
     def deposit(self, account_id: AccountId, amount: USD) -> Account:
-        ## FIXME: transaction error handling
         self._db.start_serializable_transaction()
-        account = self.load(account_id)
-        if account.closed_at is not None:
-            raise ValueError('cannot deposit into closed account')
+        try:
+            account = self.load(account_id)
+            if account.closed_at is not None:
+                raise ValueError('cannot deposit into closed account')
 
-        self._db.update_balance(account_id, account.balance + amount)
-        self._db.commit_transaction()
-        return self.load(account_id)
+            self._db.update_balance(account_id, account.balance + amount)
+            after = self.load(account_id)
+            self._db.commit_transaction()
+            return after
+        except:
+            self._db.rollback_transaction()
+            raise
 
     def withdraw(self, account_id: AccountId, amount: USD) -> Account:
-        ## FIXME: transaction error handling
         self._db.start_serializable_transaction()
-        account = self.load(account_id)
-        if account.closed_at is not None:
-            raise ValueError('cannot withdraw from closed account')
+        try:
+            account = self.load(account_id)
+            if account.closed_at is not None:
+                raise ValueError('cannot withdraw from closed account')
 
-        if account.balance < amount:
-            raise ValueError('cannot withdraw more than current balance')
+            if account.balance < amount:
+                raise ValueError('cannot withdraw more than current balance')
 
-        self._db.update_balance(account_id, account.balance - amount)
-        self._db.commit_transaction()
-        return self.load(account_id)
+            self._db.update_balance(account_id, account.balance - amount)
+            after = self.load(account_id)
+            self._db.commit_transaction()
+            return after
+        except:
+            self._db.rollback_transaction()
+            raise

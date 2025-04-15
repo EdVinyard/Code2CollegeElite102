@@ -94,6 +94,27 @@ class TestUSD(unittest.TestCase):
             if USD(1_00) >= 1_000_000:
                 self.fail('SHOULD NOT COMPARE USD TO NUMBER')
 
+class TestValidatedFullName(unittest.TestCase):
+    def test_invalid_name(self):
+        ## Arrange
+        for invalid_name in [None, '', ' \t\r\n']:
+            with self.subTest(invalid_name):
+
+                ## Act & Assert
+                with self.assertRaises(ValueError):
+                    validated_full_name(invalid_name)
+
+    def test_valid_name(self):
+        ## Arrange
+        for valid_name in ['x', 'Frank', 'x ', ' x', 'Frank the Cat']:
+            with self.subTest(valid_name):
+
+                ## Act
+                actual = validated_full_name(valid_name)
+
+                ## Assert
+                self.assertEqual(valid_name, actual)
+
 class TestAccount(unittest.TestCase):
     def test_invalid_names(self):
         for invalid_name in [None, '', ' \t\r\n']:
@@ -136,6 +157,10 @@ class FakeClock(Clock):
     def utcnow(self):
         return self.value
 
+class ExpectedError(Exception):
+    def __init__(self):
+        super().__init__()
+
 class TestBank(unittest.TestCase):
     def test_open_account(self):
         ## Arrange
@@ -149,6 +174,23 @@ class TestBank(unittest.TestCase):
         ## Assert
         self.assertTrue(db.insert.called)
         self.assertEqual('Frank the Cat', db.insert.call_args[0][0].full_name)
+
+    def test_open_account_db_error(self):
+        ## Arrange
+        db = MagicMock(side_effect=RuntimeError('fake error'))
+        db.commit_transaction.side_effect = ExpectedError()
+        clock = Mock(Clock)
+        bank = Bank(db, clock)
+
+        ## Act
+        with self.assertRaises(ExpectedError):
+            bank.open_account('Frank the Cat')
+
+        ## Assert
+        self.assertTrue(db.start_serializable_transaction.called)
+        self.assertTrue(db.insert.called)
+        self.assertTrue(db.commit_transaction.called)
+        self.assertTrue(db.rollback_transaction.called)
 
     def test_load(self):
         ## Arrange
@@ -207,6 +249,24 @@ class TestBank(unittest.TestCase):
         ## Assert
         self.assertFalse(db.update_closed_at.called)
 
+    def test_close_account_db_error(self):
+        ## Arrange
+        db = MagicMock(side_effect=RuntimeError('fake error'))
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        db.commit_transaction.side_effect = ExpectedError()
+        clock = Mock(Clock)
+        bank = Bank(db, clock)
+
+        ## Act
+        with self.assertRaises(ExpectedError):
+            bank.close_account(1)
+
+        ## Assert
+        self.assertTrue(db.start_serializable_transaction.called)
+        self.assertTrue(db.update_closed_at.called)
+        self.assertTrue(db.commit_transaction.called)
+        self.assertTrue(db.rollback_transaction.called)
+
     def test_alter_name_with_open_account(self):
         ## Arrange
         db = MagicMock(BankDatabase)
@@ -235,6 +295,37 @@ class TestBank(unittest.TestCase):
         ## Assert
         self.assertFalse(db.update_name.called)
 
+    def test_alter_name_with_invalid_name(self):
+        ## Arrange
+        utcnow = datetime.now(timezone.utc)
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        bank = Bank(db, Mock(Clock))
+
+        ## Act & Assert
+        with self.assertRaises(ValueError):
+            bank.alter_name(1, ' \t\r\n') ## just a bunch of whitespace
+
+        ## Assert
+        self.assertFalse(db.update_name.called)
+
+    def test_alter_name_db_error(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        db.commit_transaction.side_effect = ExpectedError()
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        with self.assertRaises(ExpectedError):
+            bank.alter_name(1, 'Frank the Cat')
+
+        ## Assert
+        self.assertTrue(db.start_serializable_transaction.called)
+        self.assertTrue(db.update_name.called)
+        self.assertTrue(db.commit_transaction.called)
+        self.assertTrue(db.rollback_transaction.called)
+
     def test_deposit_happy_path(self):
         ## Arrange
         db = MagicMock(BankDatabase)
@@ -249,8 +340,8 @@ class TestBank(unittest.TestCase):
             call.start_serializable_transaction(),
             call.select_by_id(1),
             call.update_balance(1, USD(3_00)),
-            call.commit_transaction(),
             call.select_by_id(1),
+            call.commit_transaction(),
             ])
 
     def test_deposit_into_closed_account(self):
@@ -263,6 +354,23 @@ class TestBank(unittest.TestCase):
         ## Act & Assert
         with self.assertRaises(ValueError):
             bank.deposit(1, USD(2_00))
+
+    def test_deposit_db_error(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD.ZERO, None)
+        db.commit_transaction.side_effect = ExpectedError()
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        with self.assertRaises(ExpectedError):
+            bank.deposit(1, USD(1))
+
+        ## Assert
+        self.assertTrue(db.start_serializable_transaction.called)
+        self.assertTrue(db.update_balance.called)
+        self.assertTrue(db.commit_transaction.called)
+        self.assertTrue(db.rollback_transaction.called)
 
     def test_withdraw_happy_path(self):
         ## Arrange
@@ -278,8 +386,8 @@ class TestBank(unittest.TestCase):
             call.start_serializable_transaction(),
             call.select_by_id(1),
             call.update_balance(1, USD.ZERO),
-            call.commit_transaction(),
             call.select_by_id(1),
+            call.commit_transaction(),
             ])
 
     def test_withdraw_from_closed_account(self):
@@ -303,6 +411,23 @@ class TestBank(unittest.TestCase):
         ## Act & Assert
         with self.assertRaises(ValueError):
             bank.withdraw(1, USD(2_00))
+
+    def test_withdraw_db_error(self):
+        ## Arrange
+        db = MagicMock(BankDatabase)
+        db.select_by_id.return_value = Account(1, 'x', USD(1), None)
+        db.commit_transaction.side_effect = ExpectedError()
+        bank = Bank(db, Mock(Clock))
+
+        ## Act
+        with self.assertRaises(ExpectedError):
+            bank.withdraw(1, USD(1))
+
+        ## Assert
+        self.assertTrue(db.start_serializable_transaction.called)
+        self.assertTrue(db.update_balance.called)
+        self.assertTrue(db.commit_transaction.called)
+        self.assertTrue(db.rollback_transaction.called)
 
 if __name__ == '__main__':
     unittest.main()

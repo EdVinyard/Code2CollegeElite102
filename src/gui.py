@@ -153,33 +153,19 @@ class MainMenu(Frame):
             self,
             text='Code2College Bank',
             ).pack(side='top')
-        ttk.Button(
-            self,
-            text='Open an Account',
-            command=self.on_open_account,
-            ).pack(side='top', fill='both')
-        ttk.Button(
-            self,
-            text='Modify Account',
-            command=self.on_modify_account,
-            ).pack(fill='both')
-        ttk.Button(
-            self,
-            text='Close an Account',
-            command=self.on_close_account,
-            ).pack(fill='both')
 
-        self.check_balance = ttk.Button(self, text='View Balance')
-        self.check_balance.pack(fill='both')
+        menu_items = [
+            ('Open an Account',     self.on_open_account),
+            ('Modify Account',      self.on_modify_account),
+            ('Close an Account',    self.on_close_account),
+            ('View Balance',        self.on_view_balance),
+            ('Deposit',             self.on_deposit),
+            ('Withdraw',            self.on_withdraw),
+            ('Quit',                on_quit),
+            ]
 
-        self.deposit = ttk.Button(self, text='Deposit')
-        self.deposit.pack(fill='both')
-
-        self.withdraw = ttk.Button(self, text='Withdraw')
-        self.withdraw.pack(fill='both')
-
-        self.quit = ttk.Button(self, text="Quit", command=on_quit)
-        self.quit.pack(fill='both')
+        for (text, command) in menu_items:
+            ttk.Button(self, text=text, command=command).pack(fill='both')
 
     def on_open_account(self):
         OpenAccount(self.parent, self.bank)
@@ -189,6 +175,15 @@ class MainMenu(Frame):
 
     def on_close_account(self):
         CloseAccount(self.parent, self.bank)
+
+    def on_view_balance(self):
+        raise NotImplementedError()
+
+    def on_deposit(self):
+        raise NotImplementedError()
+
+    def on_withdraw(self):
+        raise NotImplementedError()
 
 class Application:
     def __init__(self, bank: domain.Bank):
