@@ -13,11 +13,20 @@ class OpenAccount(Toplevel):
             self,
             text="Open an Account",
             ).pack()
+
+        form_grid = Frame(self)
+        form_grid.pack()
+
         self.full_name = StringVar()
+        ttk.Label(
+            form_grid,
+            text='Full Name',
+            ).grid(row=0, column=0)
         ttk.Entry(
-            self,
+            form_grid,
             textvariable=self.full_name,
-            ).pack(fill='both')
+            ).grid(row=0, column=1)
+
         ttk.Button(
             self,
             text='Create',
