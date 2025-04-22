@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from datetime import datetime
+import re
 
 
 AccountId = int
@@ -13,6 +14,8 @@ class USD:
     _sign: int # always -1 or +1
 
     _CENTS_PER_DOLLAR = 100
+    ##                      spaces $  dollars   . cents spaces
+    _PATTERN = re.compile(r'^ \s* \$? ([\d,]+) \. (\d\d) \s* $', re.VERBOSE)
 
     ## keep our quantities within a 32-bit signed int
     MAX_CENTS = 2**31 - 1
@@ -78,6 +81,19 @@ class USD:
             return self._total_cents >= other._total_cents
 
         raise NotImplementedError(f'cannot compare USD and {type(other)}')
+
+    @staticmethod
+    def parse(amount_str: str) -> 'USD':
+        match = USD._PATTERN.match(amount_str)
+
+        if match is None:
+            raise ValueError(f'unrecognized USD quantity: {amount_str}')
+
+        dollars = int(match.group(1).replace(',', ''))
+        franctional_cents = int(match.group(2))
+
+        total_cents = (100 * dollars) + franctional_cents
+        return USD(total_cents)
 
 USD.ZERO = USD(0)
 

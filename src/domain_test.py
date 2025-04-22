@@ -94,6 +94,24 @@ class TestUSD(unittest.TestCase):
             if USD(1_00) >= 1_000_000:
                 self.fail('SHOULD NOT COMPARE USD TO NUMBER')
 
+    def test_parse(self):
+        ## STARTHERE
+        for s in ['', 'x', ' ', '1', '$', '$1', '$1.', '$1.1']:
+            with self.assertRaises(ValueError):
+                USD.parse('')
+
+        self.assertEqual(USD.ZERO, USD.parse('$0.00'))
+        self.assertEqual(USD.ZERO, USD.parse('$00.00'))
+        self.assertEqual(USD(1), USD.parse('$0.01'))
+        self.assertEqual(USD(10), USD.parse('$0.10'))
+        self.assertEqual(USD(1_00), USD.parse('$1.00'))
+        self.assertEqual(USD(10_00), USD.parse('$10.00'))
+        self.assertEqual(USD(100_00), USD.parse('$100.00'))
+        self.assertEqual(USD(1_000_00), USD.parse('$1000.00'))
+        self.assertEqual(USD(1_000_00), USD.parse('$1,000.00'))
+        self.assertEqual(USD(1_000_000_00), USD.parse('$1,000,000.00'))
+        self.assertEqual(USD(10_00), USD.parse(' \t\r\n$10.00 \t\r\n'))
+
 class TestValidatedFullName(unittest.TestCase):
     def test_invalid_name(self):
         ## Arrange
