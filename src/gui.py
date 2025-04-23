@@ -1,4 +1,4 @@
-from tkinter import Frame, StringVar, Toplevel, Widget, ttk, Tk, messagebox
+from tkinter import Frame, StringVar, Toplevel, Widget, ttk, Tk
 from typing import Callable
 
 import domain
@@ -224,10 +224,10 @@ class Deposit(Toplevel):
             form_grid,
             text="Amount USD",
             ).grid(row=1, column=0)
-        self.amount_usd = StringVar()
+        self.amount_var = StringVar()
         ttk.Entry(
             form_grid,
-            textvariable=self.amount_usd,
+            textvariable=self.amount_var,
             ).grid(row=1, column=1)
 
         ttk.Button(
@@ -245,13 +245,76 @@ class Deposit(Toplevel):
 
     def on_click(self):
         try:
-            ## STARTHERE
             account_id = int(self.account_id.get())
-            account_id = float(self.amount_usd.get())
-            account = self.bank.alter_name(account_id, self.amount_usd.get())
+            amount = domain.USD.parse(self.amount_var.get())
+
+            before = self.bank.load(account_id)
+            after = self.bank.deposit(account_id, amount)
+
             self.message.set(
-                f'Account {account_id} balance was {balance_before};'
-                f'is now {balance_after}.')
+                f'Account {account_id} balance was {before.balance};'
+                f'is now {after.balance}.')
+        except Exception as exc:
+            self.message.set(f'ERROR {exc}')
+
+class Withdraw(Toplevel):
+    def __init__(self, parent: Widget, bank: domain.Bank):
+        super().__init__(parent)
+        self.parent = parent
+        self.bank = bank
+
+        ttk.Label(
+            self,
+            text="Withdraw from Account",
+            ).pack()
+
+        form_grid = Frame(self)
+        form_grid.pack()
+
+        ttk.Label(
+            form_grid,
+            text="Account ID",
+            ).grid(row=0, column=0)
+        self.account_id = StringVar()
+        ttk.Entry(
+            form_grid,
+            textvariable=self.account_id,
+            ).grid(row=0, column=1)
+
+        ttk.Label(
+            form_grid,
+            text="Amount USD",
+            ).grid(row=1, column=0)
+        self.amount_var = StringVar()
+        ttk.Entry(
+            form_grid,
+            textvariable=self.amount_var,
+            ).grid(row=1, column=1)
+
+        ttk.Button(
+            self,
+            text='Withdraw',
+            command=self.on_click,
+            ).pack(side='top')
+
+        self.message = StringVar()
+        self.message.set('')
+        ttk.Label(
+            self,
+            textvariable=self.message,
+            ).pack(fill='both')
+
+    def on_click(self):
+        try:
+            account_id = int(self.account_id.get())
+            amount = domain.USD.parse(self.amount_var.get())
+
+            before = self.bank.load(account_id)
+            after = self.bank.withdraw(account_id, amount)
+
+            self.message.set(
+                f'Account {account_id} balance was {before.balance};'
+                f'is now {after.balance}.')
         except Exception as exc:
             self.message.set(f'ERROR {exc}')
 
@@ -296,10 +359,10 @@ class MainMenu(Frame):
         ViewBalance(self.parent, self.bank)
 
     def on_deposit(self):
-        messagebox.showerror(message='not implemented')
+        Deposit(self.parent, self.bank)
 
     def on_withdraw(self):
-        messagebox.showerror(message='not implemented')
+        Withdraw(self.parent, self.bank)
 
 class Application:
     def __init__(self, bank: domain.Bank):

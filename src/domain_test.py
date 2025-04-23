@@ -224,7 +224,7 @@ class TestBank(unittest.TestCase):
         bank = Bank(db, clock)
 
         ## Act
-        actual = bank.load(1)
+        actual = bank._load(1)
 
         ## Assert
         self.assertTrue(db.select_by_id.called)
