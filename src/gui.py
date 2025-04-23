@@ -3,6 +3,7 @@ from typing import Callable
 
 import domain
 
+
 class OpenAccount(Toplevel):
     def __init__(self, parent: Widget, bank: domain.Bank):
         super().__init__(parent)
