@@ -1,7 +1,7 @@
 -- all dates and times will be in the UTC time zone
 SET time_zone = '+00:00';
 
-create table account (
+create table if not exists account (
 	-- an account number/identifier
     id int primary key auto_increment,
 
